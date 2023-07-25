@@ -14,6 +14,12 @@ import (
 	"golang.org/x/text/encoding/charmap"
 )
 
+var (
+	errInvalidTimeout    = errors.New("invalid timeout")
+	errFailedToGetCurs   = errors.New("failed to get curs")
+	errInvalidDateFormat = errors.New("date invalid format")
+)
+
 const (
 	YYYYMMDD = "2006-01-02"
 	DDMMYYYY = "02-01-2006"
@@ -36,7 +42,7 @@ type Client struct {
 
 func newClient(timeout time.Duration) (*Client, error) {
 	if timeout <= 0 {
-		return nil, errors.New("invalid timeout")
+		return nil, errInvalidTimeout
 	}
 
 	return &Client{
@@ -69,7 +75,7 @@ func main() {
 
 	result, err := c.getCurs(dateStr)
 	if err != nil {
-		print("failed to get curs")
+		print(errFailedToGetCurs)
 		return
 	}
 
@@ -88,7 +94,7 @@ func main() {
 func formatDate(dateStr string) (string, error) {
 	date, err := time.Parse(YYYYMMDD, dateStr)
 	if err != nil {
-		return "", errors.New("date invalid format")
+		return "", errInvalidDateFormat
 	}
 
 	newDate := date.Format(DDMMYYYY)
@@ -106,12 +112,13 @@ func (c *Client) getCurs(dateStr string) (Curs, error) {
 	req.Header.Add("User-Agent", `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_5) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11`)
 
 	var result Curs
-	if xmlBytes, err := c.getXML(req); err != nil {
+	xmlBytes, err := c.getXML(req)
+	if err != nil {
 		return Curs{}, err
-	} else {
-		if err := decodeXML(xmlBytes, &result); err != nil {
-			return Curs{}, err
-		}
+	}
+
+	if err := decodeXML(xmlBytes, &result); err != nil {
+		return Curs{}, err
 	}
 
 	return result, err
@@ -121,8 +128,7 @@ func decodeXML(xmlBytes []byte, v any) error {
 	decoder := xml.NewDecoder(bytes.NewReader(xmlBytes))
 	decoder.CharsetReader = charset
 	if err := decoder.Decode(&v); err != nil {
-		fmt.Printf("[ERROR] Cannot decode file %e", err)
-		return err
+		return fmt.Errorf("[ERROR] Cannot decode file %e", err)
 	}
 	return nil
 }
